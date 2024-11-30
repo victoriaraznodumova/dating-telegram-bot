@@ -16,24 +16,23 @@ import java.util.Properties;
 public class TinderBoltApp extends MultiSessionTelegramBot {
     public static final String TELEGRAM_BOT_NAME = "javarush_dating_ai_bot"; //TODO: добавь имя бота в кавычках
     public static final String TELEGRAM_BOT_TOKEN; //TODO: добавь токен бота в кавычках
+    public static final String OPEN_AI_TOKEN; //TODO: добавь токен ChatGPT в кавычках
     static{
-        TELEGRAM_BOT_TOKEN = getToken();
-    }
-    public static final String OPEN_AI_TOKEN = "chat-gpt-token"; //TODO: добавь токен ChatGPT в кавычках
-
-    public static String getToken(){
         Properties prop = new Properties();
         try {
             //load a properties file from class path, inside static method
             prop.load(TinderBoltApp.class.getClassLoader().getResourceAsStream("config.properties"));
-            //get the property value and print it out
-            return prop.getProperty("token");
+            TELEGRAM_BOT_TOKEN = prop.getProperty("telegram_bot_token");
+            OPEN_AI_TOKEN = prop.getProperty("open_ai_token");
         }
         catch (IOException ex) {
             ex.printStackTrace();
-            throw new RuntimeException("Не удалось загрузить token из config.properties", ex);
+            throw new RuntimeException("Не удалось загрузить токен из config.properties", ex);
         }
     }
+
+    private ChatGPTService chatGPT = new ChatGPTService(OPEN_AI_TOKEN);
+    private DialogMode currentMode = null;
 
     public TinderBoltApp() {
         super(TELEGRAM_BOT_NAME, TELEGRAM_BOT_TOKEN);
@@ -46,9 +45,32 @@ public class TinderBoltApp extends MultiSessionTelegramBot {
         String message = getMessageText(); //переслать сообщение пользователя
 
         if (message.equals("/start")){
+            currentMode = DialogMode.MAIN;
             sendPhotoMessage("main");
             String text = loadMessage("main");//загружает текст из messages/main.txt
             sendTextMessage(text);
+
+            showMainMenu("главное меню бота", "/start",
+                    "генерация Tinder-профля \uD83D\uDE0E", "/profile",
+                    "сообщение для знакомства \uD83E\uDD70", "/opener",
+                    "переписка от вашего имени \uD83D\uDE08", "/message",
+                    "переписка со звездами \uD83D\uDD25", "/date",
+                    "задать вопрос чату GPT \uD83E\uDDE0", "/gpt");
+            return;
+        }
+
+        if (message.equals("/gpt")){
+            currentMode = DialogMode.GPT;
+            sendPhotoMessage("gpt");
+            String text = loadMessage("gpt");
+            sendTextMessage(text);
+            return;
+        }
+
+        if (currentMode == DialogMode.GPT){
+            String prompt = loadPrompt("gpt");
+            String answer = chatGPT.sendMessage(prompt, message);
+            sendTextMessage(answer);
             return;
         }
 
